@@ -2,7 +2,8 @@ name: Auto Commit
 
 on:
   schedule:
-    - cron: "0 */6 * * *" # Runs every 6 hours
+    - cron: "0 */6 * * *"  # Runs every 6 hours
+  workflow_dispatch:  # Enables manual trigger
 
 jobs:
   commit:
@@ -11,7 +12,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          persist-credentials: false  # Prevents conflicts with authentication
+          persist-credentials: false
 
       - name: Make changes
         run: |
@@ -19,11 +20,11 @@ jobs:
           git config --global user.name "Amjadshaneeb"
           git config --global user.email "amjadshaneeb783@gmail.com"
           git add update.txt
-          git diff --staged --quiet || git commit -m "Auto commit on $(date)"  # Prevents empty commits
+          git commit -m "Auto commit on $(date)" || echo "No changes to commit"
 
       - name: Push changes
         env:
-          GITHUB_TOKEN: ${{ secrets.AUTO_TOKEN }}  # Make sure AUTO_TOKEN exists in repository secrets
+          GITHUB_TOKEN: ${{ secrets.AUTO_TOKEN }}
         run: |
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git push origin HEAD:main
+          git push origin main
