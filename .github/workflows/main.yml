@@ -1,28 +1,79 @@
-name: Auto Commit
+name: Commit
 
 on:
-  schedule:
-    - cron: "0 */4 * * *"  # Runs every 6 hours
-  workflow_dispatch:  # Enables manual trigger
+  workflow_dispatch:
 
 jobs:
   commit:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           persist-credentials: false
 
-      - name: Make changes
+      # ---------- Decide whether today is a "coding day" ----------
+      - name: Decide whether to commit
+        id: decide
         run: |
-          echo "$(date)" > update.txt
+          DAY=$(date +%u)   # 1 = Monday, 7 = Sunday
+          RANDOM_CHANCE=$((RANDOM % 100))
+
+          # Skip most weekends
+          if [ "$DAY" -ge 6 ] && [ "$RANDOM_CHANCE" -lt 80 ]; then
+            echo "commit=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 45% chance to skip even on weekdays
+          if [ "$RANDOM_CHANCE" -lt 45 ]; then
+            echo "commit=false" >> $GITHUB_OUTPUT
+          else
+            echo "commit=true" >> $GITHUB_OUTPUT
+          fi
+
+      # ---------- Make realistic changes ----------
+      - name: Make changes
+        if: steps.decide.outputs.commit == 'true'
+        run: |
           git config --global user.name "Amjadshaneeb"
           git config --global user.email "amjadshaneeb783@gmail.com"
-          git add update.txt
-          git commit -m "Auto commit on $(date)" || echo "No changes to commit"
 
+          FILES=("README.md" "notes.md" "todo.md" "changelog.md")
+          FILE=${FILES[$RANDOM % ${#FILES[@]}]}
+
+          if [ ! -f "$FILE" ]; then
+            echo "# $FILE" > "$FILE"
+          fi
+
+          echo "- Updated on $(date +'%d %b')" >> "$FILE"
+
+          git add "$FILE"
+
+          MESSAGES=(
+            "minor update"
+            "cleanup"
+            "update docs"
+            "small refactor"
+            "notes update"
+            "quick fix"
+            "content tweak"
+          )
+
+          MSG=${MESSAGES[$RANDOM % ${#MESSAGES[@]}]}
+
+          HOURS_AGO=$((RANDOM % 8))
+          COMMIT_DATE=$(date -d "$HOURS_AGO hours ago")
+
+          export GIT_AUTHOR_DATE="$COMMIT_DATE"
+          export GIT_COMMITTER_DATE="$COMMIT_DATE"
+
+          git commit -m "$MSG" || echo "Nothing to commit"
+
+      # ---------- Push if commit happened ----------
       - name: Push changes
+        if: steps.decide.outputs.commit == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.AUTO_TOKEN }}
         run: |
