@@ -2,6 +2,11 @@ name: Commit
 
 on:
   workflow_dispatch:
+    inputs:
+      force_commit:
+        description: "Force a commit (true = always commit)"
+        required: false
+        default: "false"
 
 jobs:
   commit:
@@ -17,8 +22,17 @@ jobs:
       - name: Decide whether to commit
         id: decide
         run: |
-          DAY=$(date +%u)   # 1 = Monday, 7 = Sunday
+          FORCE="${{ github.event.inputs.force_commit }}"
+          DAY=$(date +%u)
           RANDOM_CHANCE=$((RANDOM % 100))
+
+          echo "Force commit: $FORCE"
+          echo "Random chance: $RANDOM_CHANCE"
+
+          if [ "$FORCE" = "true" ]; then
+            echo "commit=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           # Skip most weekends
           if [ "$DAY" -ge 6 ] && [ "$RANDOM_CHANCE" -lt 80 ]; then
@@ -26,8 +40,8 @@ jobs:
             exit 0
           fi
 
-          # 45% chance to skip even on weekdays
-          if [ "$RANDOM_CHANCE" -lt 45 ]; then
+          # 25% skip on weekdays
+          if [ "$RANDOM_CHANCE" -lt 25 ]; then
             echo "commit=false" >> $GITHUB_OUTPUT
           else
             echo "commit=true" >> $GITHUB_OUTPUT
@@ -35,6 +49,51 @@ jobs:
 
       # ---------- Make realistic changes ----------
       - name: Make changes
+        if: steps.decide.outputs.commit == 'true'
+        run: |
+          git config user.name "Amjadshaneeb"
+          git config user.email "amjadshaneeb783@gmail.com"
+
+          FILES=("README.md" "notes.md" "todo.md" "changelog.md")
+          FILE=${FILES[$RANDOM % ${#FILES[@]}]}
+
+          [ ! -f "$FILE" ] && echo "# $FILE" > "$FILE"
+
+          echo "- Updated on $(date +'%d %b %H:%M')" >> "$FILE"
+
+          git add "$FILE"
+
+          # Exit if nothing actually changed
+          git diff --quiet && exit 0
+
+          MESSAGES=(
+            "minor update"
+            "cleanup"
+            "update docs"
+            "small refactor"
+            "notes update"
+            "quick fix"
+            "content tweak"
+          )
+
+          MSG=${MESSAGES[$RANDOM % ${#MESSAGES[@]}]}
+
+          HOURS_AGO=$((RANDOM % 8))
+          COMMIT_DATE=$(date -d "$HOURS_AGO hours ago")
+
+          export GIT_AUTHOR_DATE="$COMMIT_DATE"
+          export GIT_COMMITTER_DATE="$COMMIT_DATE"
+
+          git commit -m "$MSG"
+
+      # ---------- Push if commit happened ----------
+      - name: Push changes
+        if: steps.decide.outputs.commit == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.AUTO_TOKEN }}
+        run: |
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          git push origin main      - name: Make changes
         if: steps.decide.outputs.commit == 'true'
         run: |
           git config --global user.name "Amjadshaneeb"
